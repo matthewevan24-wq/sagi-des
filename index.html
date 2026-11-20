@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="id"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>sagi-des | Sagi Poker</title>
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:system-ui,Arial;background:#0b2e1f;color:#fff;padding:16px}
+.wrap{max-width:900px;margin:auto;text-align:center}
+h1{margin:6px 0 0;font-size:34px} p.sub{color:#b7d8c5;margin:4px 0 16px}
+.table{background:#14663f;border:10px solid #5a2e0d;border-radius:180px;padding:22px 16px 16px;box-shadow:0 10px 30px rgba(0,0,0,.5)}
+.cards{display:flex;gap:8px;justify-content:center;min-height:88px;flex-wrap:wrap}
+.card{width:58px;height:84px;background:#fff;color:#111;border-radius:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-weight:800;font-size:20px;box-shadow:0 4px 10px rgba(0,0,0,.4)}
+.card.red{color:#d21f3c}.card.back{background:#1e3a8a;color:#fff;font-size:28px}
+.row{display:flex;justify-content:space-between;align-items:center;gap:10px;margin:12px 0;flex-wrap:wrap}
+.pill{background:rgba(0,0,0,.35);padding:8px 14px;border-radius:999px;font-weight:700}
+button{border:0;padding:13px 16px;border-radius:12px;font-weight:800;cursor:pointer;font-size:15px}
+.btn-gold{background:#ffd700}.btn-white{background:#fff}.btn-dark{background:#111;color:#fff}.btn-red{background:#e11d48;color:#fff}
+button:disabled{opacity:.45;cursor:not-allowed}
+#msg{min-height:28px;font-weight:700;margin:10px 0}
+.badge{display:inline-block;background:#ffd700;color:#111;padding:4px 10px;border-radius:999px;font-size:12px;font-weight:800}
+small{color:#b7d8c5}
+</style></head><body>
+<div class="wrap"><span class="badge">SAGI-DES • ROOT / index.html</span><h1>♠️ sagi-des — SAGI POKER ♥️</h1><p class="sub">repo belajar dan experiment untuk project sagi-des • Texas Hold'em vs Bot • Chip virtual, tanpa uang asli</p>
+<div class="table">
+<div class="row"><span class="pill">🤖 BOT DENZ • <span id="botChip">1000</span> chip</span><span class="pill">POT • <span id="pot">0</span></span><span class="pill">🫵 KAMU • <span id="myChip">1000</span> chip</span></div>
+<p style="margin:4px">Kartu Bot</p><div class="cards" id="botCards"></div>
+<p style="margin:10px 0 4px">Community Cards</p><div class="cards" id="board"></div>
+<p style="margin:10px 0 4px">Kartu Kamu</p><div class="cards" id="myCards"></div>
+<div id="msg">Klik Mulai Ronde untuk main!</div>
+<div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
+<button class="btn-gold" id="startBtn" onclick="startRound()">▶️ Mulai Ronde</button>
+<button class="btn-white" id="checkBtn" onclick="playerAction('check')" disabled>Check / Call</button>
+<button class="btn-dark" id="raiseBtn" onclick="playerAction('raise')" disabled>Raise +100</button>
+<button class="btn-red" id="foldBtn" onclick="playerAction('fold')" disabled>Fold</button>
+<button class="btn-white" onclick="resetGame()">🔄 Reset Chip</button>
+</div>
+<p><small>Menang: <span id="wins">0</span> • Kalah: <span id="losses">0</span> • Kombinasi kamu: <b id="handName">-</b></small></p>
+</div><p><small>Cara main: Mulai Ronde → Check/Call atau Raise → kartu kebuka Flop → Turn → River → Showdown. Paling bagus kombinasi-nya yang menang.</small></p></div>
+<script>
+const suits=['♠','♥','♦','♣']; const ranks=['2','3','4','5','6','7','8','9','10','J','Q','K','A'];
+let deck=[], my=[], bot=[], board=[], stage=0, pot=0, myChip=1000, botChip=1000, wins=0, losses=0, myBet=0, botBet=0;
+function newDeck(){deck=[]; for(let s of suits) for(let r of ranks) deck.push({r,s}); deck.sort(()=>Math.random()-.5);}
+function cardHTML(c,hidden){ if(hidden) return `<div class="card back">?</div>`; let red=(c.s=='♥'||c.s=='♦'); return `<div class="card ${red?'red':''}"><span>${c.r}</span><span>${c.s}</span></div>`;}
+function render(showBot=false){ document.getElementById('myCards').innerHTML=my.map(c=>cardHTML(c)).join('')||'<div style="color:#b7d8c5">-</div>';
+document.getElementById('botCards').innerHTML=bot.map(c=>cardHTML(c,!showBot)).join('');
+document.getElementById('board').innerHTML=board.map(c=>cardHTML(c)).join('')||'<div style="color:#b7d8c5">Belum ada kartu</div>';
+document.getElementById('pot').textContent=pot; document.getElementById('myChip').textContent=myChip; document.getElementById('botChip').textContent=botChip; }
+function val(r){return ranks.indexOf(r)+2;}
+function evaluate(cards){ let vals=cards.map(c=>val(c.r)).sort((a,b)=>b-a); let counts={}; vals.forEach(v=>counts[v]=(counts[v]||0)+1); let pairs=Object.values(counts).sort((a,b)=>b-a); let isFlush=new Set(cards.map(c=>c.s)).size==1; let uniq=[...new Set(vals)].sort((a,b)=>b-a); let isStraight=uniq.length>=5 && (uniq[0]-uniq[4]==4 || (uniq.includes(14)&&uniq.includes(5)&&uniq.includes(4)&&uniq.includes(3)&&uniq.includes(2))); if(isFlush&&isStraight&&uniq[0]==14) return [9,'Royal Flush']; if(isFlush&&isStraight) return [8,'Straight Flush']; if(pairs[0]==4) return [7,'Four of a Kind']; if(pairs[0]==3&&pairs[1]==2) return [6,'Full House']; if(isFlush) return [5,'Flush']; if(isStraight) return [4,'Straight']; if(pairs[0]==3) return [3,'Three of a Kind']; if(pairs[0]==2&&pairs[1]==2) return [2,'Two Pair']; if(pairs[0]==2) return [1,'Pair']; return [0,'High Card '+cards[0].r]; }
+function best5(all){ let best=[-1,'']; for(let i=0;i<all.length;i++) for(let j=i+1;j<all.length;j++){ let c=all.filter((_,k)=>k!=i&&k!=j); let e=evaluate(c); if(e[0]>best[0]) best=e; } return best; }
+function setBtns(on){ ['checkBtn','raiseBtn','foldBtn'].forEach(id=>document.getElementById(id).disabled=!on); document.getElementById('startBtn').disabled=on; }
+function startRound(){ if(myChip<=0||botChip<=0){ alert('Chip habis! Klik Reset Chip'); return; } newDeck(); my=[deck.pop(),deck.pop()]; bot=[deck.pop(),deck.pop()]; board=[]; stage=0; pot=0; myBet=0; botBet=0; let ante=50; myChip-=ante; botChip-=ante; pot+=100; document.getElementById('msg').textContent='Ronde baru! Ante 50. Giliran kamu.'; document.getElementById('handName').textContent='-'; render(); setBtns(true); }
+function playerAction(act){ if(act=='fold'){ losses++; document.getElementById('losses').textContent=losses; document.getElementById('msg').textContent='Kamu Fold. Bot menang pot '+pot; botChip+=pot; pot=0; render(true); setBtns(false); return; }
+if(act=='raise'){ if(myChip<100){ alert('Chip kurang!'); return; } myChip-=100; pot+=100; myBet+=100; }
+let botFold=Math.random()<0.18; if(botFold){ wins++; document.getElementById('wins').textContent=wins; document.getElementById('msg').textContent='Bot Fold! Kamu menang pot '+pot; myChip+=pot; pot=0; render(true); setBtns(false); return; }
+if(botChip>=50){ botChip-=50; pot+=50; }
+if(stage==0){ board=[deck.pop(),deck.pop(),deck.pop()]; stage=1; document.getElementById('msg').textContent='FLOP terbuka! Lanjut?'; }
+else if(stage==1){ board.push(deck.pop()); stage=2; document.getElementById('msg').textContent='TURN terbuka! Lanjut?'; }
+else if(stage==2){ board.push(deck.pop()); stage=3; showdown(); return; }
+render(); }
+function showdown(){ let myBest=best5([...my,...board]); let botBest=best5([...bot,...board]); document.getElementById('handName').textContent=myBest[1]+' vs Bot: '+botBest[1];
+let msg=''; if(myBest[0]>botBest[0]){ wins++; myChip+=pot; msg='🏆 MENANG! Kamu: '+myBest[1]+' | Bot: '+botBest[1]+' • +'+pot+' chip'; }
+else if(myBest[0]<botBest[0]){ losses++; botChip+=pot; msg='😅 Kalah. Kamu: '+myBest[1]+' | Bot: '+botBest[1]; }
+else { myChip+=pot/2; botChip+=pot/2; msg='🤝 Seri! Sama-sama '+myBest[1]; }
+document.getElementById('wins').textContent=wins; document.getElementById('losses').textContent=losses; document.getElementById('msg').textContent=msg; pot=0; render(true); setBtns(false); }
+function resetGame(){ myChip=1000; botChip=1000; pot=0; wins=0; losses=0; my=[]; bot=[]; board=[]; document.getElementById('wins').textContent=0; document.getElementById('losses').textContent=0; document.getElementById('msg').textContent='Chip di-reset! Klik Mulai Ronde.'; render(); setBtns(false); }
+render();
+</script></body></html>
